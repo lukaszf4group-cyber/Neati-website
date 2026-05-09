@@ -35,6 +35,11 @@ declare module "react-simple-maps" {
     fill?: string;
     stroke?: string;
     strokeWidth?: number;
+    strokeLinejoin?: "round" | "miter" | "bevel";
+    strokeLinecap?: "round" | "butt" | "square";
+    vectorEffect?: string;
+    shapeRendering?: string;
+    paintOrder?: string;
     style?: {
       default?: React.CSSProperties;
       hover?: React.CSSProperties;

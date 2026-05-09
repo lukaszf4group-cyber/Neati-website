@@ -535,6 +535,7 @@ function Nav() {
     { label: "MULTIMEDIA", href: "#multimedia" },
     { label: "ZASIĘG", href: "#zasieg" },
     { label: "EKOLOGIA", href: "#ekologia" },
+    { label: "CORE", href: "#core" },
     { label: "BIURA", href: "#biura" },
     { label: "KONTAKT", href: "#kontakt" },
   ];
@@ -1567,31 +1568,29 @@ const LOCATIONS = [
 ];
 type Location = typeof LOCATIONS[number];
 
-// IDs of Poland (616) and Italy (380) in the 110m dataset
-const HIGHLIGHTED = new Set(["616", "380"]);
 
 type RSMComponents = typeof import("react-simple-maps");
 type ZoomRegion = "global" | "europe" | "usa";
 
-// ── Projection utils (approx. geoMercator matching ComposableMap config) ──
+// ── Projection utils — match d3-geo geoMercator used by ComposableMap ────────
 const SVG_W = 900, SVG_H = 480;
-const PROJ_LON0 = -40, PROJ_LAT0 = 48, PROJ_SCALE = 260;
 
-function lonLatToSVG(coords: [number, number]): [number, number] {
+type ProjCfg = { center: [number, number]; scale: number };
+
+// One config per zoom state — passed directly to ComposableMap projectionConfig
+const PROJ_CONFIGS: Record<ZoomRegion, ProjCfg> = {
+  global:  { center: [-20, 30], scale: 160 },
+  europe:  { center: [13,  52], scale: 580 },
+  usa:     { center: [-92, 33], scale: 500 },
+};
+
+// Forward Mercator: mirrors d3-geo geoMercator(center, scale, translate)
+function projectPoint(lon: number, lat: number, cfg: ProjCfg): [number, number] {
   const DEG = Math.PI / 180;
-  const x = SVG_W / 2 + PROJ_SCALE * (coords[0] - PROJ_LON0) * DEG * Math.cos(PROJ_LAT0 * DEG);
-  const yc = -PROJ_SCALE * Math.log(Math.tan(Math.PI / 4 + PROJ_LAT0 * DEG / 2));
-  const yp = -PROJ_SCALE * Math.log(Math.tan(Math.PI / 4 + coords[1] * DEG / 2));
-  return [x, SVG_H / 2 + (yp - yc)];
-}
-
-// Compute CSS transform target to zoom onto the centroid of a region
-function regionZoomTarget(region: "europe" | "usa", cssScale: number) {
-  const pts = LOCATIONS.filter(l => l.region === region);
-  const lonC = pts.reduce((s, p) => s + p.coords[0], 0) / pts.length;
-  const latC = pts.reduce((s, p) => s + p.coords[1], 0) / pts.length;
-  const [px, py] = lonLatToSVG([lonC, latC]);
-  return { scale: cssScale, x: -(px - SVG_W / 2) * cssScale, y: -(py - SVG_H / 2) * cssScale };
+  const mercY = (φ: number) => Math.log(Math.tan(Math.PI / 4 + φ * DEG / 2));
+  const x = SVG_W / 2 + cfg.scale * (lon - cfg.center[0]) * DEG;
+  const y = SVG_H / 2 - cfg.scale * (mercY(lat) - mercY(cfg.center[1]));
+  return [x, y];
 }
 
 // Stagger delays: group by country, 0.2s between countries, 0.1s within same country
@@ -1611,37 +1610,36 @@ function computeStaggerDelays(region: "europe" | "usa"): Map<number, number> {
   return delays;
 }
 
-// Fixed centers instead of auto-centroid
-const EUROPE_ZOOM = (() => { const [px, py] = lonLatToSVG([10, 51]);  const s = 3.08; return { scale: s, x: -(px - SVG_W / 2) * s, y: -(py - SVG_H / 2) * s }; })();
-const USA_ZOOM    = (() => { const [px, py] = lonLatToSVG([-98, 37]); const s = 2.5;  return { scale: s, x: -(px - SVG_W / 2) * s, y: -(py - SVG_H / 2) * s }; })();
-const EUROPE_DELAYS  = computeStaggerDelays("europe");
-const USA_DELAYS     = computeStaggerDelays("usa");
+const EUROPE_DELAYS = computeStaggerDelays("europe");
+const USA_DELAYS    = computeStaggerDelays("usa");
 
-// Plane path — arc from central Europe to Atlanta (not mid-ocean)
-const [EX, EY] = lonLatToSVG([11,  49]);
-const [UX, UY] = lonLatToSVG([-84, 34]); // Atlanta, GA
+// Plane path computed in GLOBAL projection — animation happens during global view
+const [EX, EY] = projectPoint(10,  48, PROJ_CONFIGS.global);   // central Europe
+const [UX, UY] = projectPoint(-85, 33, PROJ_CONFIGS.global);   // Atlanta, GA
 const MX = (EX + UX) / 2, MY = Math.min(EY, UY) - 90;
 const PLANE_PATH_D = `M ${EX.toFixed(1)} ${EY.toFixed(1)} Q ${MX.toFixed(1)} ${MY.toFixed(1)} ${UX.toFixed(1)} ${UY.toFixed(1)}`;
-
-function quadBez(t: number, p0: number, p1: number, p2: number) {
-  return (1 - t) ** 2 * p0 + 2 * (1 - t) * t * p1 + t ** 2 * p2;
-}
 
 // Register GSAP plugin once
 if (typeof window !== "undefined") gsap.registerPlugin(MotionPathPlugin);
 
 function MapaSwiat() {
   const sectionRef = useRef<HTMLDivElement>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
   const planeRef   = useRef<SVGGElement>(null);
   const trailRef   = useRef<SVGPathElement>(null);
   const tlRef      = useRef<gsap.core.Timeline | null>(null);
+  // Mutable object GSAP tweens each frame; setProjCfg triggers a React re-render
+  const projAnim = useRef({
+    lon:   PROJ_CONFIGS.global.center[0],
+    lat:   PROJ_CONFIGS.global.center[1],
+    scale: PROJ_CONFIGS.global.scale,
+  });
 
   const isInView = useInView(sectionRef, { once: true, margin: "0px 0px -120px 0px" });
-  const [hovered, setHovered] = useState<number | null>(null);
-  const [zoom, setZoom] = useState<ZoomRegion>("global");
+  const [hovered, setHovered]   = useState<number | null>(null);
+  const [zoom, setZoom]         = useState<ZoomRegion>("global");
+  const [projCfg, setProjCfg]   = useState<ProjCfg>(PROJ_CONFIGS.global);
   const [visibleIds, setVisibleIds] = useState<Set<number>>(new Set());
-  const [rsm, setRsm] = useState<RSMComponents | null>(null);
+  const [rsm, setRsm]           = useState<RSMComponents | null>(null);
 
   useEffect(() => {
     import("react-simple-maps").then(setRsm);
@@ -1649,80 +1647,64 @@ function MapaSwiat() {
 
   // Build GSAP timeline once RSM is loaded and section is in view
   useEffect(() => {
-    if (!isInView || !rsm || !wrapperRef.current) return;
+    if (!isInView || !rsm) return;
 
     const euroLocs = LOCATIONS.filter(l => l.region === "europe");
-    const setEuro  = () => { setZoom("europe"); };
-    const setGlobal= () => { setZoom("global"); setVisibleIds(new Set()); };
-    const setUSA   = () => { setZoom("usa"); };
+    const pa = projAnim.current;
 
-    // Initial GSAP state
-    gsap.set(wrapperRef.current, { scale: 1, x: 0, y: 0, transformOrigin: "center center" });
-    if (planeRef.current)  gsap.set(planeRef.current,  { opacity: 0 });
-    if (trailRef.current)  gsap.set(trailRef.current,  { opacity: 0, strokeDashoffset: 1 });
+    // Helper: add a smooth projection tween to the timeline
+    const zoomTo = (cfg: ProjCfg, dur: number) =>
+      tl.to(pa, {
+        lon: cfg.center[0], lat: cfg.center[1], scale: cfg.scale,
+        duration: dur, ease: "power2.inOut",
+        onUpdate() { setProjCfg({ center: [pa.lon, pa.lat], scale: pa.scale }); },
+      });
+
+    if (planeRef.current) gsap.set(planeRef.current, { opacity: 0 });
+    if (trailRef.current) gsap.set(trailRef.current, { opacity: 0, strokeDashoffset: 1 });
 
     const tl = gsap.timeline({ repeat: -1 });
     tlRef.current = tl;
 
-    // ── 1. Initial global pause (2s) ──────────────────────────────────
+    // ── 1. Global pause ───────────────────────────────────────────────
     tl.to({}, { duration: 2 });
 
-    // ── 2. Zoom in Europe (2.5s) ──────────────────────────────────────
-    tl.to(wrapperRef.current, {
-      scale: EUROPE_ZOOM.scale, x: EUROPE_ZOOM.x, y: EUROPE_ZOOM.y,
-      duration: 2.5, ease: "power2.inOut", onStart: setEuro,
-    });
+    // ── 2. Smooth zoom to Europe (2.5s) ───────────────────────────────
+    zoomTo(PROJ_CONFIGS.europe, 2.5);
+    tl.call(() => setZoom("europe"));
 
-    // ── 3. Europe cities appear (stagger driven by EUROPE_DELAYS) ────
+    // ── 3. Europe cities appear ───────────────────────────────────────
     tl.call(() => setVisibleIds(new Set(euroLocs.map(l => l.id))));
+    tl.to({}, { duration: 4 });   // pause on Europe
 
-    // ── 4. Pause on Europe (3s) ───────────────────────────────────────
-    tl.to({}, { duration: 3 });
-
-    // ── 5. Zoom out global (2s), clear cities ─────────────────────────
-    tl.to(wrapperRef.current, {
-      scale: 1, x: 0, y: 0,
-      duration: 2, ease: "power2.inOut", onStart: setGlobal,
-    });
-
-    // ── 6. Global pause (1.5s) ────────────────────────────────────────
+    // ── 4. Smooth zoom back to global (2s), clear cities ─────────────
+    tl.call(() => { setZoom("global"); setVisibleIds(new Set()); });
+    zoomTo(PROJ_CONFIGS.global, 2);
     tl.to({}, { duration: 1.5 });
 
-    // ── 7. Plane + trail (3.5s) ───────────────────────────────────────
+    // ── 5. Plane + trail (3.5s) ───────────────────────────────────────
     tl.set(planeRef.current, { opacity: 1 });
     tl.set(trailRef.current, { opacity: 0.55, strokeDashoffset: 1 });
-
-    // Trail draws alongside plane movement
     tl.to(trailRef.current, { strokeDashoffset: 0, duration: 3.5, ease: "none" }, "fly");
     tl.to(planeRef.current, {
       motionPath: { path: "#plane-arc-path", autoRotate: true, start: 0, end: 1 },
       duration: 3.5, ease: "power1.inOut",
     }, "fly");
-
-    // Fade out plane + trail
     tl.to(planeRef.current, { opacity: 0, duration: 0.4 });
     tl.to(trailRef.current, { opacity: 0, duration: 0.5 }, "<");
 
-    // ── 8. Zoom in USA (2.5s) ─────────────────────────────────────────
-    tl.to(wrapperRef.current, {
-      scale: USA_ZOOM.scale, x: USA_ZOOM.x, y: USA_ZOOM.y,
-      duration: 2.5, ease: "power2.inOut", onStart: setUSA,
-    });
+    // ── 6. Smooth zoom to USA (2.5s) ──────────────────────────────────
+    zoomTo(PROJ_CONFIGS.usa, 2.5);
+    tl.call(() => setZoom("usa"));
 
-    // ── 9. USA cities appear ──────────────────────────────────────────
+    // ── 7. USA cities appear ──────────────────────────────────────────
     tl.call(() => setVisibleIds(new Set(LOCATIONS.map(l => l.id))));
+    tl.to({}, { duration: 4 });   // pause on USA
 
-    // ── 10. Pause on USA (3s) ─────────────────────────────────────────
-    tl.to({}, { duration: 3 });
-
-    // ── 11. Zoom out global (2s), clear cities ────────────────────────
-    tl.to(wrapperRef.current, {
-      scale: 1, x: 0, y: 0,
-      duration: 2, ease: "power2.inOut", onStart: setGlobal,
-    });
-
-    // ── 12. Final pause (2s) → repeat ────────────────────────────────
-    tl.to({}, { duration: 2 });
+    // ── 8. Smooth zoom back to global (2s), clear cities ─────────────
+    tl.call(() => { setZoom("global"); setVisibleIds(new Set()); });
+    zoomTo(PROJ_CONFIGS.global, 2);
+    tl.to({}, { duration: 2 });   // final pause → repeat
 
     return () => { tl.kill(); };
   }, [isInView, rsm]);
@@ -1756,33 +1738,52 @@ function MapaSwiat() {
         >
           {rsm ? (
             <>
-              {/* Zoom wrapper — controlled by GSAP */}
-              <div ref={wrapperRef} style={{ transformOrigin: "center center", willChange: "transform" }}>
-                <rsm.ComposableMap
-                  projection="geoMercator"
-                  projectionConfig={{ center: [-40, 48], scale: 260 }}
-                  style={{ width: "100%", height: "auto", display: "block" }}
-                  width={SVG_W}
-                  height={SVG_H}
-                >
-                  <rsm.Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
-                    {({ geographies }) =>
-                      geographies.map((geo) => (
+              {/* Map — projection animated by GSAP each frame via projCfg state */}
+              <rsm.ComposableMap
+                projection="geoMercator"
+                projectionConfig={projCfg}
+                style={{ width: "100%", height: "auto", display: "block" }}
+                width={SVG_W}
+                height={SVG_H}
+              >
+                <rsm.Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
+                  {({ geographies }) => {
+                    const isHL = (geo: import("react-simple-maps").Geography) => {
+                      const n = String(geo.properties?.name ?? "");
+                      return n === "Poland" || n === "Italy";
+                    };
+                    const renderGeo = (geo: import("react-simple-maps").Geography) => {
+                      const hl = isHL(geo);
+                      return (
                         <rsm.Geography
                           key={geo.rsmKey}
                           geography={geo}
-                          fill={HIGHLIGHTED.has(geo.id) ? "#1e1e1e" : "#1a1a1a"}
-                          stroke={HIGHLIGHTED.has(geo.id) ? "#EF771B" : "#2a2a2a"}
-                          strokeWidth={0.5}
+                          fill={hl ? "#1e1e1e" : "#1a1a1a"}
+                          stroke={hl ? "#EF771B" : "#2a2a2a"}
+                          strokeWidth={hl ? 0.6 : 0.5}
+                          strokeLinejoin={hl ? "round" : undefined}
+                          strokeLinecap={hl ? "round" : undefined}
+                          vectorEffect={hl ? "non-scaling-stroke" : undefined}
+                          shapeRendering={hl ? "geometricPrecision" : undefined}
+                          paintOrder={hl ? "stroke" : undefined}
                           style={{
                             default: { outline: "none" },
-                            hover: { outline: "none", fill: HIGHLIGHTED.has(geo.id) ? "#252525" : "#1e1e1e" },
+                            hover: { outline: "none", fill: hl ? "#252525" : "#1e1e1e" },
                             pressed: { outline: "none" },
                           }}
                         />
-                      ))
-                    }
-                  </rsm.Geographies>
+                      );
+                    };
+                    return (
+                      <>
+                        {/* Pass 1: all countries except Poland & Italy */}
+                        {geographies.filter(g => !isHL(g)).map(renderGeo)}
+                        {/* Pass 2: Poland & Italy on top so their borders aren't covered */}
+                        {geographies.filter(g => isHL(g)).map(renderGeo)}
+                      </>
+                    );
+                  }}
+                </rsm.Geographies>
 
                   {/* Hidden arc path — used by MotionPathPlugin */}
                   <path id="plane-arc-path" d={PLANE_PATH_D} fill="none" stroke="none" />
@@ -1821,8 +1822,6 @@ function MapaSwiat() {
                     const dotR = loc.isHQ ? 6 : loc.isHub ? 5 : 4;
                     const dotFill = loc.isHQ ? "#EF771B" : "white";
                     const dotStroke = "#EF771B";
-                    // Inverse scale when zoomed
-                    const markerScale = zooming && sameRegion ? 0.45 : 1;
                     const markerOpacity = zooming && !sameRegion ? 0 : visible ? 1 : 0;
                     // Label
                     const zoomed = zooming && sameRegion;
@@ -1832,7 +1831,7 @@ function MapaSwiat() {
                     return (
                       <rsm.Marker key={loc.id} coordinates={loc.coords}>
                         <motion.g
-                          animate={{ opacity: markerOpacity, scale: markerScale }}
+                          animate={{ opacity: markerOpacity }}
                           transition={{ duration: 0.55, ease: "easeInOut" }}
                           onMouseEnter={() => setHovered(loc.id)}
                           onMouseLeave={() => setHovered(null)}
@@ -1923,7 +1922,6 @@ function MapaSwiat() {
                     );
                   })}
                 </rsm.ComposableMap>
-              </div>
 
               {/* Zoom region indicator */}
               <motion.div
@@ -2359,6 +2357,269 @@ function Faq() {
   );
 }
 
+/* ─── NEATI CORE ──────────────────────────────────────────────────────── */
+function MatrixRain() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Capture non-null refs so TypeScript doesn't lose narrowing inside rAF
+    const c = canvas;
+    const x2d = ctx;
+
+    const CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ[]{}./\\|=+-*#@";
+    const COL_W = 18;
+    const FONT_SIZE = 12;
+    const SPEED_MIN = 2, SPEED_MAX = 4;
+
+    let raf: number;
+
+    function resize() {
+      c.width  = c.offsetWidth;
+      c.height = c.offsetHeight;
+    }
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(c);
+
+    const cols = Math.floor(c.width / COL_W);
+    const drops = Array.from({ length: cols }, () => Math.random() * -c.height);
+    const speeds = Array.from({ length: cols }, () => SPEED_MIN + Math.random() * (SPEED_MAX - SPEED_MIN));
+
+    function draw() {
+      x2d.fillStyle = "rgba(0,0,0,0.05)";
+      x2d.fillRect(0, 0, c.width, c.height);
+      x2d.font = `${FONT_SIZE}px monospace`;
+
+      for (let i = 0; i < cols; i++) {
+        const px = i * COL_W + 2;
+        const py = drops[i];
+
+        // Trail chars
+        const trailLen = 8 + Math.floor(Math.random() * 6);
+        for (let t = 1; t <= trailLen; t++) {
+          const ty = py - t * FONT_SIZE;
+          if (ty < 0 || ty > c.height) continue;
+          const alpha = Math.max(0, 0.06 - t * 0.005);
+          x2d.fillStyle = `rgba(239,119,27,${alpha})`;
+          x2d.fillText(CHARS[Math.floor(Math.random() * CHARS.length)], px, ty);
+        }
+
+        // Head char — brightest
+        if (py >= 0 && py <= c.height) {
+          x2d.fillStyle = "rgba(239,119,27,0.40)";
+          x2d.fillText(CHARS[Math.floor(Math.random() * CHARS.length)], px, py);
+        }
+
+        drops[i] += speeds[i];
+
+        if (drops[i] > c.height + FONT_SIZE) {
+          drops[i] = -FONT_SIZE * (4 + Math.random() * 10);
+          speeds[i] = SPEED_MIN + Math.random() * (SPEED_MAX - SPEED_MIN);
+        }
+      }
+
+      raf = requestAnimationFrame(draw);
+    }
+
+    raf = requestAnimationFrame(draw);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full"
+      style={{ zIndex: 0 }}
+      aria-hidden
+    />
+  );
+}
+
+function NeatiCore() {
+  const ref = useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, { once: true, margin: "0px 0px -80px 0px" });
+  const [typed, setTyped] = useState("");
+  const SUBTITLE = "Asset Command Center";
+
+  // Typewriter effect — starts when section enters view
+  useEffect(() => {
+    if (!isInView) return;
+    let i = 0;
+    setTyped("");
+    const id = setInterval(() => {
+      i++;
+      setTyped(SUBTITLE.slice(0, i));
+      if (i >= SUBTITLE.length) clearInterval(id);
+    }, 60);
+    return () => clearInterval(id);
+  }, [isInView]);
+
+  const badges = [
+    { icon: "🔒", label: "SZYFROWANE SSL" },
+    { icon: "⚡", label: "DOSTĘP 24/7" },
+    { icon: "🛡", label: "PRYWATNE" },
+  ];
+
+  return (
+    <section id="core" className="py-24 sm:py-32 relative overflow-hidden" style={{ background: "#0d0d0d" }}>
+      {/* Matrix rain canvas */}
+      <MatrixRain />
+
+      {/* HUD grid lines */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden style={{ zIndex: 1 }}>
+        {/* Horizontal lines */}
+        {[20, 40, 60, 80].map(p => (
+          <div key={`h${p}`} className="absolute w-full" style={{ top: `${p}%`, height: "1px", background: `rgba(239,119,27,0.07)` }} />
+        ))}
+        {/* Vertical lines */}
+        {[15, 30, 50, 70, 85].map(p => (
+          <div key={`v${p}`} className="absolute h-full" style={{ left: `${p}%`, width: "1px", background: `rgba(239,119,27,0.07)` }} />
+        ))}
+        {/* Corner brackets */}
+        <div className="absolute top-6 left-6 w-8 h-8 border-t border-l" style={{ borderColor: "rgba(239,119,27,0.25)" }} />
+        <div className="absolute top-6 right-6 w-8 h-8 border-t border-r" style={{ borderColor: "rgba(239,119,27,0.25)" }} />
+        <div className="absolute bottom-6 left-6 w-8 h-8 border-b border-l" style={{ borderColor: "rgba(239,119,27,0.25)" }} />
+        <div className="absolute bottom-6 right-6 w-8 h-8 border-b border-r" style={{ borderColor: "rgba(239,119,27,0.25)" }} />
+      </div>
+
+      <div ref={ref} className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" style={{ zIndex: 10 }}>
+        <div className="max-w-3xl">
+          {/* Eyebrow */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={isInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.5 }}
+            className="flex items-center gap-3 mb-4"
+          >
+            <span className="text-xs font-bold tracking-widest" style={{ color: "#EF771B" }}>STREFA KLIENTA</span>
+            <span className="text-xs tracking-widest text-gray-600">▸</span>
+            {/* Lock icon */}
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ opacity: 0.5 }}>
+              <rect x="2" y="6" width="10" height="7" rx="1.5" stroke="#EF771B" strokeWidth="1.2"/>
+              <path d="M4 6V4.5a3 3 0 0 1 6 0V6" stroke="#EF771B" strokeWidth="1.2" strokeLinecap="round"/>
+              <circle cx="7" cy="9.5" r="1" fill="#EF771B"/>
+            </svg>
+          </motion.div>
+
+          {/* Title */}
+          <motion.h2
+            initial={{ opacity: 0, y: 24 }}
+            animate={isInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="text-5xl sm:text-7xl font-black tracking-tight leading-none mb-2"
+          >
+            NEATI <span style={{ color: "#EF771B" }}>CORE™</span>
+          </motion.h2>
+
+          {/* Typewriter subtitle */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={isInView ? { opacity: 1 } : {}}
+            transition={{ duration: 0.3, delay: 0.25 }}
+            className="text-xl sm:text-2xl font-light tracking-widest mb-4"
+            style={{ color: "#EF771B", fontFamily: "monospace", minHeight: "2rem" }}
+          >
+            {typed}
+            <motion.span
+              animate={{ opacity: [1, 0] }}
+              transition={{ duration: 0.7, repeat: Infinity, repeatType: "reverse" }}
+              style={{ display: "inline-block", width: "2px", height: "1.1em", background: "#EF771B", marginLeft: "2px", verticalAlign: "middle" }}
+            />
+          </motion.div>
+
+          <RevealLine delay={0.3} />
+
+          {/* Body text */}
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={isInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="text-base sm:text-lg mb-8 leading-relaxed"
+            style={{ color: "#888", fontWeight: 300, maxWidth: "600px" }}
+          >
+            Twój prywatny terminal dowodzenia. Od wgrania pierwszego briefu, przez
+            akceptację projektów 3D, aż po statusy list załadunkowych do USA.
+            Zamiast setek maili – jedno szyfrowane środowisko, w którym w czasie
+            rzeczywistym zarządzasz swoimi aktywami.
+          </motion.p>
+
+          {/* Badges */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={isInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.5, delay: 0.5 }}
+            className="flex flex-wrap gap-2 mb-10"
+          >
+            {badges.map(b => (
+              <span
+                key={b.label}
+                className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold tracking-widest"
+                style={{
+                  border: "1px solid rgba(239,119,27,0.25)",
+                  background: "rgba(239,119,27,0.05)",
+                  color: "rgba(255,255,255,0.55)",
+                  borderRadius: "2px",
+                  fontFamily: "monospace",
+                }}
+              >
+                <span style={{ fontSize: "10px" }}>{b.icon}</span>
+                {b.label}
+              </span>
+            ))}
+          </motion.div>
+
+          {/* Buttons */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={isInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.6 }}
+            className="flex flex-wrap gap-4"
+          >
+            <a
+              href="#"
+              className="group relative inline-flex items-center gap-2 px-8 py-3 text-sm font-black tracking-widest transition-all duration-200"
+              style={{ background: "#EF771B", color: "#1A1A1A" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 0 28px rgba(239,119,27,0.55)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}
+            >
+              ZALOGUJ DO PORTALU
+              <span className="transition-transform group-hover:translate-x-1">→</span>
+            </a>
+            <a
+              href="#"
+              className="group inline-flex items-center gap-2 px-8 py-3 text-sm font-black tracking-widest transition-all duration-200"
+              style={{ border: "1px solid rgba(255,255,255,0.35)", color: "white", background: "transparent" }}
+              onMouseEnter={e => {
+                const el = e.currentTarget as HTMLElement;
+                el.style.borderColor = "#EF771B";
+                el.style.color = "#EF771B";
+                el.style.boxShadow = "0 0 20px rgba(239,119,27,0.2)";
+              }}
+              onMouseLeave={e => {
+                const el = e.currentTarget as HTMLElement;
+                el.style.borderColor = "rgba(255,255,255,0.35)";
+                el.style.color = "white";
+                el.style.boxShadow = "none";
+              }}
+            >
+              WGRAJ BRIEF
+              <span className="transition-transform group-hover:translate-x-1">→</span>
+            </a>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ─── NASZE BIURA ─────────────────────────────────────────────────────── */
 function NaszeBiura() {
   const sectionRef = useRef<HTMLDivElement>(null);
@@ -2653,6 +2914,7 @@ export default function Home() {
       <Proces />
       <Faq />
       <Kontakt />
+      <NeatiCore />
       <NaszeBiura />
       <Footer />
     </main>
