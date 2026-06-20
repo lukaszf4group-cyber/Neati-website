@@ -5,6 +5,8 @@ import Image from "next/image";
 import { motion, useInView, AnimatePresence, useMotionValue, useSpring } from "framer-motion";
 import gsap from "gsap";
 import { MotionPathPlugin } from "gsap/MotionPathPlugin";
+import { client } from "@/sanity/lib/client";
+import { portfolioAllQuery } from "@/sanity/lib/queries";
 
 /* ─── HERO PARTICLES (canvas, no library) ────────────────────────────── */
 function HeroParticles() {
@@ -977,123 +979,27 @@ function Filozofia() {
   );
 }
 
-/* ─── PROJECT DATA ────────────────────────────────────────────────────── */
-const PROJECTS = [
-  {
-    city: "Berlin",
-    event: "Messe Berlin · Automatica",
-    size: "120 m²",
-    description: "Dwupiętrowe stoisko z pełnym oświetleniem LED, systemem audiowizualnym i strefą VIP dla klientów premium.",
-    images: [
-      "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1400&q=85",
-      "https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=1400&q=85",
-      "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1400&q=85",
-      "https://images.unsplash.com/photo-1531058020387-3be344556be6?w=1400&q=85",
-    ],
-  },
-  {
-    city: "Las Vegas",
-    event: "CES · Las Vegas Convention Center",
-    size: "250 m²",
-    description: "Trzy strefy produktowe, interaktywne ekrany 4K i konfigurowalne ściany LED. Największa realizacja NEATI w USA.",
-    images: [
-      "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1400&q=85",
-      "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1400&q=85",
-      "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1400&q=85",
-      "https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=1400&q=85",
-    ],
-  },
-  {
-    city: "Mediolan",
-    event: "Salone del Mobile",
-    size: "80 m²",
-    description: "Minimalistyczny design z organicznym oświetleniem, strefą prezentacji produktów i detalami w złocie.",
-    images: [
-      "https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=1400&q=85",
-      "https://images.unsplash.com/photo-1531058020387-3be344556be6?w=1400&q=85",
-      "https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=1400&q=85",
-      "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1400&q=85",
-    ],
-  },
-  {
-    city: "Amsterdam",
-    event: "ISE · RAI Amsterdam",
-    size: "160 m²",
-    description: "Stoisko technologiczne z modułowymi panelami, systemem zarządzania treścią i strefą demo dla partnerów.",
-    images: [
-      "https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=1400&q=85",
-      "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1400&q=85",
-      "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1400&q=85",
-      "https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=1400&q=85",
-    ],
-  },
-  {
-    city: "Frankfurt",
-    event: "Messe Frankfurt · Light + Building",
-    size: "180 m²",
-    description: "Hybrydowa zabudowa multimedialna z systemem LED i trzema strefami produktowymi. Moduły rekonfigurowane między czterema wydarzeniami rocznie.",
-    images: [
-      "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1400&q=85",
-      "https://images.unsplash.com/photo-1531058020387-3be344556be6?w=1400&q=85",
-      "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1400&q=85",
-      "https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=1400&q=85",
-    ],
-  },
-  {
-    city: "Amsterdam",
-    event: "ISE · RAI Amsterdam (2. edycja)",
-    size: "90 m²",
-    description: "Modułowe stoisko z ekranami LED i systemem zarządzania treścią. Montaż i demontaż w 12h — rekord NEATI dla tej lokalizacji.",
-    images: [
-      "https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=1400&q=85",
-      "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1400&q=85",
-      "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1400&q=85",
-      "https://images.unsplash.com/photo-1531058020387-3be344556be6?w=1400&q=85",
-    ],
-  },
-  {
-    city: "Warszawa",
-    event: "Warsaw Expo · Warsaw Build",
-    size: "140 m²",
-    description: "Pełna integracja AV z systemem nagłośnienia, wielkoformatowymi ekranami i strefą konferencyjną dla 20 osób.",
-    images: [
-      "https://images.unsplash.com/photo-1531058020387-3be344556be6?w=1400&q=85",
-      "https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=1400&q=85",
-      "https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=1400&q=85",
-      "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1400&q=85",
-    ],
-  },
-  {
-    city: "Mediolan",
-    event: "Salone del Mobile (edycja premium)",
-    size: "200 m²",
-    description: "Premium booth z systemem LED i organicznym oświetleniem. Dwupoziomowy układ z galerią materiałów i strefą hospitality. Największa realizacja NEATI w Europie.",
-    images: [
-      "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1400&q=85",
-      "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1400&q=85",
-      "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1400&q=85",
-      "https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=1400&q=85",
-    ],
-  },
-];
 
 /* ─── LIGHTBOX ────────────────────────────────────────────────────────── */
 type LightboxState = { projectIdx: number; imgIdx: number };
+type ProjectItem = { city: string; event: string; size: string; description: string; images: string[] };
 
 function Lightbox({
   state,
+  projects,
   onClose,
   onPrev,
   onNext,
   onThumb,
 }: {
   state: LightboxState;
+  projects: ProjectItem[];
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
   onThumb: (i: number) => void;
 }) {
-  const project = PROJECTS[state.projectIdx];
+  const project = projects[state.projectIdx];
   const img = project.images[state.imgIdx];
 
   // Keyboard navigation
@@ -1241,12 +1147,37 @@ function Lightbox({
 function Realizacje() {
   const [hovered, setHovered] = useState<number | null>(null);
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
+  const [sanityProjects, setSanityProjects] = useState<ProjectItem[]>([]);
+  const [sanityLoaded, setSanityLoaded] = useState(false);
+
+  useEffect(() => {
+    client.fetch<Array<{ _id: string; title: string; city: string; area?: number; description?: string | null; client?: string; images: { url: string }[] }>>(portfolioAllQuery)
+      .then((data) => {
+        if (data && data.length > 0) {
+          const mapped: ProjectItem[] = data.map((item) => ({
+            city: item.city,
+            event: item.client ? `${item.client} · ${item.city}` : item.title,
+            size: item.area ? `${item.area} m²` : "—",
+            description: item.description || "",
+            images: item.images?.map((img) => img.url).filter(Boolean) || [],
+          }));
+          setSanityProjects(mapped);
+        }
+        setSanityLoaded(true);
+      })
+      .catch(() => { setSanityLoaded(true); });
+  }, []);
+
+  const projects = sanityProjects;
 
   const open = (projectIdx: number) => setLightbox({ projectIdx, imgIdx: 0 });
   const close = () => setLightbox(null);
-  const prev = () => setLightbox((s) => s ? { ...s, imgIdx: (s.imgIdx - 1 + PROJECTS[s.projectIdx].images.length) % PROJECTS[s.projectIdx].images.length } : s);
-  const next = () => setLightbox((s) => s ? { ...s, imgIdx: (s.imgIdx + 1) % PROJECTS[s.projectIdx].images.length } : s);
+  const prev = () => setLightbox((s) => s ? { ...s, imgIdx: (s.imgIdx - 1 + projects[s.projectIdx].images.length) % projects[s.projectIdx].images.length } : s);
+  const next = () => setLightbox((s) => s ? { ...s, imgIdx: (s.imgIdx + 1) % projects[s.projectIdx].images.length } : s);
   const thumb = (i: number) => setLightbox((s) => s ? { ...s, imgIdx: i } : s);
+
+  const gridRef = useRef(null);
+  const isGridInView = useInView(gridRef, { once: true, margin: "0px 0px -80px 0px" });
 
   return (
     <section id="realizacje" className="py-24 sm:py-32" style={{ background: "#161616" }}>
@@ -1271,107 +1202,85 @@ function Realizacje() {
           </div>
         </FadeIn>
 
-        {/* Desktop: two rows of 4 expanding flex cards */}
-        {[PROJECTS.slice(0, 4), PROJECTS.slice(4, 8)].map((rowProjects, rowIdx) => (
-          <FadeIn key={rowIdx} delay={rowIdx * 0.15}>
-            <div className="hidden md:flex gap-3 h-[380px] mb-3">
-              {rowProjects.map((p, colIdx) => {
-                const i = rowIdx * 4 + colIdx;
-                return (
-                  <motion.div
-                    key={i}
-                    className="relative overflow-hidden cursor-pointer flex-shrink-0"
-                    style={{ borderRadius: "2px" }}
-                    animate={{ flex: hovered === i ? 3.5 : 1 }}
-                    transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
-                    onMouseEnter={() => setHovered(i)}
-                    onMouseLeave={() => setHovered(null)}
-                    onClick={() => open(i)}
-                    whileHover={{
-                      y: -8,
-                      boxShadow: "0 0 0 1px rgba(239,119,27,0.3), 0 16px 48px rgba(239,119,27,0.12)",
-                      transition: { type: "spring", stiffness: 400, damping: 28, delay: 0 },
-                    }}
-                  >
-                    <img
-                      src={p.images[0].replace("w=1400", "w=900")}
-                      alt={p.city}
-                      className="w-full h-full object-cover"
-                      style={{ transform: hovered === i ? "scale(1.05)" : "scale(1)", transition: "transform 0.6s ease" }}
-                    />
-                    <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(26,26,26,0.95) 0%, rgba(26,26,26,0.3) 50%, transparent 100%)" }} />
-                    <div className="absolute top-0 left-0 right-0 h-1" style={{ background: hovered === i ? "#EF771B" : "transparent", transition: "background 0.3s" }} />
-
-                    <div
-                      className="absolute top-4 left-4 px-2 py-0.5 text-xs font-bold tracking-widest flex items-center gap-1"
-                      style={{ background: "rgba(26,26,26,0.75)", color: "white", backdropFilter: "blur(4px)", border: "1px solid #333" }}
-                    >
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <rect x="0.5" y="2.5" width="9" height="7" rx="1" stroke="currentColor" strokeWidth="1"/>
-                        <circle cx="5" cy="6" r="1.5" stroke="currentColor" strokeWidth="1"/>
-                      </svg>
-                      {p.images.length}
-                    </div>
-
-                    <div
-                      className="absolute top-4 right-4 px-3 py-1 text-xs font-black tracking-widest"
-                      style={{ background: "#EF771B", color: "#1A1A1A" }}
-                    >
-                      {p.size}
-                    </div>
-
-                    <div className="absolute bottom-0 left-0 right-0 p-6">
-                      <div className="text-xs font-bold tracking-widest text-gray-400 mb-1 overflow-hidden whitespace-nowrap">{p.event}</div>
-                      <div className="text-2xl font-black text-white">{p.city}</div>
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: hovered === i ? "auto" : 0, opacity: hovered === i ? 1 : 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="overflow-hidden"
-                      >
-                        <p className="text-gray-300 text-sm leading-relaxed mt-2">{p.description}</p>
-                        <span className="inline-block mt-3 text-xs font-black tracking-widest px-4 py-2" style={{ background: "#EF771B", color: "#1A1A1A" }}>
-                          ZOBACZ GALERIĘ →
-                        </span>
-                      </motion.div>
-                    </div>
-                  </motion.div>
-                );
-              })}
+        {/* Dynamic grid — auto-creates rows for any number of projects */}
+        <div
+          ref={gridRef}
+          className="grid grid-cols-2 md:grid-cols-4 gap-3"
+        >
+          {sanityLoaded && projects.length === 0 && (
+            <div
+              className="col-span-2 md:col-span-4 flex items-center justify-center"
+              style={{ height: "280px", border: "1px solid #2a2a2a", background: "#1a1a1a" }}
+            >
+              <p className="text-gray-500 text-sm tracking-widest font-bold">WKRÓTCE WIĘCEJ REALIZACJI</p>
             </div>
-          </FadeIn>
-        ))}
+          )}
+          {projects.map((p, i) => (
+            <motion.div
+              key={i}
+              className="relative overflow-hidden cursor-pointer"
+              style={{ height: "280px", borderRadius: "2px" }}
+              initial={{ opacity: 0, y: 40, filter: "blur(8px)" }}
+              animate={isGridInView ? { opacity: 1, y: 0, filter: "blur(0px)" } : { opacity: 0, y: 40, filter: "blur(8px)" }}
+              transition={{ duration: 0.6, delay: i * 0.07, ease: [0.25, 0.1, 0.25, 1] }}
+              onMouseEnter={() => setHovered(i)}
+              onMouseLeave={() => setHovered(null)}
+              onClick={() => open(i)}
+              whileHover={{
+                y: -8,
+                scale: 1.02,
+                boxShadow: "0 0 0 1px rgba(239,119,27,0.4), 0 20px 56px rgba(239,119,27,0.18)",
+                transition: { type: "spring", stiffness: 400, damping: 28, delay: 0 },
+              }}
+            >
+              <img
+                src={p.images[0].replace("w=1400", "w=900")}
+                alt={p.city}
+                className="w-full h-full object-cover"
+                style={{ transform: hovered === i ? "scale(1.07)" : "scale(1)", transition: "transform 0.6s ease" }}
+              />
+              <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(26,26,26,0.95) 0%, rgba(26,26,26,0.3) 55%, transparent 100%)" }} />
+              <div
+                className="absolute top-0 left-0 right-0 h-1"
+                style={{ background: hovered === i ? "#EF771B" : "transparent", transition: "background 0.3s" }}
+              />
 
-        {/* Mobile: 2-column grid */}
-        <FadeIn delay={0.2}>
-          <div className="md:hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {PROJECTS.map((p, i) => (
-              <motion.div
-                key={i}
-                className="relative overflow-hidden cursor-pointer"
-                style={{ height: "260px" }}
-                onClick={() => open(i)}
-                whileHover={{ y: -8, boxShadow: "0 0 0 1px rgba(239,119,27,0.3), 0 16px 48px rgba(239,119,27,0.12)", transition: { type: "spring", stiffness: 400, damping: 28, delay: 0 } }}
+              <div
+                className="absolute top-3 left-3 px-2 py-0.5 text-xs font-bold tracking-widest flex items-center gap-1"
+                style={{ background: "rgba(26,26,26,0.78)", color: "white", backdropFilter: "blur(4px)", border: "1px solid #333" }}
               >
-                <img src={p.images[0].replace("w=1400", "w=600")} alt={p.city} className="w-full h-full object-cover" />
-                <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(26,26,26,0.95) 0%, rgba(26,26,26,0.2) 60%, transparent 100%)" }} />
-                <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: "#EF771B" }} />
-                <div className="absolute top-3 left-3 px-2 py-0.5 text-xs font-bold flex items-center gap-1" style={{ background: "rgba(26,26,26,0.8)", color: "white" }}>
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                    <rect x="0.5" y="2.5" width="9" height="7" rx="1" stroke="currentColor" strokeWidth="1"/>
-                    <circle cx="5" cy="6" r="1.5" stroke="currentColor" strokeWidth="1"/>
-                  </svg>
-                  {p.images.length}
-                </div>
-                <div className="absolute top-3 right-3 px-2 py-0.5 text-xs font-black" style={{ background: "#EF771B", color: "#1A1A1A" }}>{p.size}</div>
-                <div className="absolute bottom-0 left-0 right-0 p-4">
-                  <div className="text-xs text-gray-400 mb-1">{p.event}</div>
-                  <div className="text-xl font-black text-white">{p.city}</div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </FadeIn>
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <rect x="0.5" y="2.5" width="9" height="7" rx="1" stroke="currentColor" strokeWidth="1"/>
+                  <circle cx="5" cy="6" r="1.5" stroke="currentColor" strokeWidth="1"/>
+                </svg>
+                {p.images.length}
+              </div>
+
+              <div
+                className="absolute top-3 right-3 px-2 py-0.5 text-xs font-black tracking-widest"
+                style={{ background: "#EF771B", color: "#1A1A1A" }}
+              >
+                {p.size}
+              </div>
+
+              <div className="absolute bottom-0 left-0 right-0 p-4 md:p-5">
+                <div className="text-xs font-bold tracking-widest text-gray-400 mb-1 overflow-hidden whitespace-nowrap">{p.event}</div>
+                <div className="text-lg md:text-xl font-black text-white">{p.city}</div>
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: hovered === i ? "auto" : 0, opacity: hovered === i ? 1 : 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden hidden md:block"
+                >
+                  <p className="text-gray-300 text-xs leading-relaxed mt-1 line-clamp-2">{p.description}</p>
+                  <span className="inline-block mt-2 text-xs font-black tracking-widest px-3 py-1.5" style={{ background: "#EF771B", color: "#1A1A1A" }}>
+                    ZOBACZ GALERIĘ →
+                  </span>
+                </motion.div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
 
         <FadeIn delay={0.4}>
           <div className="mt-12 text-center">
@@ -1390,7 +1299,7 @@ function Realizacje() {
       {/* Lightbox portal */}
       <AnimatePresence>
         {lightbox && (
-          <Lightbox state={lightbox} onClose={close} onPrev={prev} onNext={next} onThumb={thumb} />
+          <Lightbox state={lightbox} projects={projects} onClose={close} onPrev={prev} onNext={next} onThumb={thumb} />
         )}
       </AnimatePresence>
     </section>
