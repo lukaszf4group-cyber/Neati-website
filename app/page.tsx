@@ -1920,7 +1920,7 @@ function SkalaLogistyka() {
             {[
               { val: "20+", label: "Krajów" },
               { val: "6", label: "Baz Logistycznych" },
-              { val: "48h", label: "Maks. Czas Montażu" },
+              { val: "20+", label: "Projektów w USA" },
               { val: "24/7", label: "Support Techniczny" },
             ].map((s, i) => (
               <div key={s.label} className="py-8 text-center" style={{ borderRight: i < 3 ? "1px solid #333" : undefined }}>
